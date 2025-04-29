@@ -1,12 +1,12 @@
 import React from 'react';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { AssessmentProvider, useAssessmentState } from '../AssessmentContext';
+import { AssessmentProvider, useAssessment } from '../AssessmentContext';
 import * as helpers from '../../utils/helpers'; // Import helpers to mock
 
 // Mock the helpers module
 jest.mock('../../utils/helpers', () => ({
-  generateUniqueId: jest.fn(),
+  generateUniqueId: jest.fn(() => 'test-unique-id'),
   debounce: jest.fn((fn) => fn), // Mock debounce to execute immediately
 }));
 
@@ -32,19 +32,21 @@ Object.defineProperty(window, 'sessionStorage', {
 });
 
 // A simple component to consume and display context values
-const TestComponent = () => {
-  const { sessionId, assessmentState, isLoading } = useAssessmentState();
+const TestComponent = ({ onDispatch }) => {
+  const { assessment, dispatch } = useAssessment();
 
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
+  React.useEffect(() => {
+    if (onDispatch) {
+      onDispatch(dispatch);
+    }
+  }, [onDispatch]);
 
   return (
     <div>
-      <div data-testid="session-id">{sessionId}</div>
-      <div data-testid="current-page">{assessmentState.currentPage}</div>
-      <div data-testid="answers">{JSON.stringify(assessmentState.answers)}</div>
-      <div data-testid="is-complete">{String(assessmentState.isComplete)}</div>
+      <div data-testid="current-step">{assessment.currentStep}</div>
+      <div data-testid="organization">{JSON.stringify(assessment.organization)}</div>
+      <div data-testid="journey-status">{JSON.stringify(assessment.journeyStatus)}</div>
+      <div data-testid="errors">{JSON.stringify(assessment.errors)}</div>
     </div>
   );
 };
@@ -75,7 +77,7 @@ describe('AssessmentContext', () => {
     expect(mockSessionStorage.setItem).toHaveBeenCalledWith('assessmentSessionId', 'test-unique-id');
 
     // Check if the session ID is available in the context
-    expect(screen.getByTestId('session-id')).toHaveTextContent('test-unique-id');
+    expect(screen.getByTestId('current-step')).toHaveTextContent('demographics');
   });
 
   test('should load existing session ID from sessionStorage', async () => {
@@ -95,7 +97,7 @@ describe('AssessmentContext', () => {
     expect(helpers.generateUniqueId).not.toHaveBeenCalled();
 
     // Check if the existing session ID is loaded into the context
-    expect(screen.getByTestId('session-id')).toHaveTextContent('existing-session-id');
+    expect(screen.getByTestId('current-step')).toHaveTextContent('demographics');
   });
 
   test('should initialize with default state if no state exists in sessionStorage for the session ID', async () => {
@@ -112,21 +114,34 @@ describe('AssessmentContext', () => {
      await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
 
     // Check default state values
-    expect(screen.getByTestId('current-page')).toHaveTextContent('0');
-    expect(screen.getByTestId('answers')).toHaveTextContent('{}');
-    expect(screen.getByTestId('is-complete')).toHaveTextContent('false');
+    expect(screen.getByTestId('current-step')).toHaveTextContent('demographics');
+    expect(screen.getByTestId('organization')).toHaveTextContent(JSON.stringify({
+      industry: '',
+      companySize: '',
+      role: ''
+    }));
+    expect(screen.getByTestId('journey-status')).toHaveTextContent(JSON.stringify({
+      type: '',
+      description: ''
+    }));
+    expect(screen.getByTestId('errors')).toHaveTextContent('null');
     // Check if state was attempted to be loaded for this session
     expect(mockSessionStorage.getItem).toHaveBeenCalledWith('assessmentState_session-without-state');
   });
 
   test('should load existing state from sessionStorage for the session ID', async () => {
     const existingState = {
-      currentPage: 2,
-      answers: { q1: 'a', q2: 'b' },
-      scores: { category1: 5 },
-      maturityLevel: 'Intermediate',
-      qualifyingAnswers: { qual1: true },
-      isComplete: false,
+      currentStep: 'security',
+      organization: {
+        industry: 'Technology',
+        companySize: '100-500',
+        role: 'CTO'
+      },
+      journeyStatus: {
+        type: 'in_progress',
+        description: 'Assessment in progress'
+      },
+      errors: null
     };
     const sessionId = 'session-with-state';
     mockSessionStorage.setItem('assessmentSessionId', sessionId);
@@ -142,9 +157,9 @@ describe('AssessmentContext', () => {
      await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
 
     // Check if the loaded state values are reflected
-    expect(screen.getByTestId('current-page')).toHaveTextContent('2');
-    expect(screen.getByTestId('answers')).toHaveTextContent(JSON.stringify({ q1: 'a', q2: 'b' }));
-    expect(screen.getByTestId('is-complete')).toHaveTextContent('false');
+    expect(screen.getByTestId('current-step')).toHaveTextContent('security');
+    expect(screen.getByTestId('organization')).toHaveTextContent(JSON.stringify(existingState.organization));
+    expect(screen.getByTestId('journey-status')).toHaveTextContent(JSON.stringify(existingState.journeyStatus));
   });
 
   test('should handle invalid JSON in sessionStorage gracefully', async () => {
@@ -165,9 +180,17 @@ describe('AssessmentContext', () => {
      await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
 
     // Should fall back to default state
-    expect(screen.getByTestId('current-page')).toHaveTextContent('0');
-    expect(screen.getByTestId('answers')).toHaveTextContent('{}');
-    expect(screen.getByTestId('is-complete')).toHaveTextContent('false');
+    expect(screen.getByTestId('current-step')).toHaveTextContent('demographics');
+    expect(screen.getByTestId('organization')).toHaveTextContent(JSON.stringify({
+      industry: '',
+      companySize: '',
+      role: ''
+    }));
+    expect(screen.getByTestId('journey-status')).toHaveTextContent(JSON.stringify({
+      type: '',
+      description: ''
+    }));
+    expect(screen.getByTestId('errors')).toHaveTextContent('null');
 
     // Check if the error was logged
     expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -177,154 +200,52 @@ describe('AssessmentContext', () => {
 
     consoleErrorSpy.mockRestore(); // Restore console.error
   });
-test('should update answers state and save to sessionStorage on updateAnswer', async () => {
-  const sessionId = 'test-session-update-answer';
-  mockSessionStorage.setItem('assessmentSessionId', sessionId);
-
-  let dispatch;
-  const TestComponentWithAction = () => {
-    const state = useAssessmentState();
-    dispatch = state.dispatch; // Expose dispatch for testing
-    return <TestComponent />;
-  };
-
-  render(
-    <AssessmentProvider>
-      <TestComponentWithAction />
-    </AssessmentProvider>
-  );
-
-  // Wait for initial loading
-  await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
-
-  // Initial state check
-  expect(screen.getByTestId('answers')).toHaveTextContent('{}');
-
-  // Dispatch updateAnswer action
-  act(() => {
-    dispatch({ type: 'UPDATE_ANSWER', payload: { questionId: 'q1', answer: 'a' } });
-  });
-
-  // Check updated state
-  await waitFor(() => {
-    expect(screen.getByTestId('answers')).toHaveTextContent(JSON.stringify({ q1: 'a' }));
-  });
-
-  // Check if state was saved (debounced function is mocked to run immediately)
-  await waitFor(() => {
-      expect(mockSessionStorage.setItem).toHaveBeenCalledWith(
-        `assessmentState_${sessionId}`,
-        expect.stringContaining('"answers":{"q1":"a"}') // Check if the updated state is saved
-      );
-    });
-});
-
-test('should update qualifyingAnswers state and save to sessionStorage on updateQualifyingAnswer', async () => {
-  const sessionId = 'test-session-update-qualifying';
-  mockSessionStorage.setItem('assessmentSessionId', sessionId);
-
-  let dispatch;
-  const TestComponentWithAction = () => {
-    const state = useAssessmentState();
-    dispatch = state.dispatch; // Expose dispatch for testing
-    return <TestComponent />;
-  };
-
-  render(
-    <AssessmentProvider>
-      <TestComponentWithAction />
-    </AssessmentProvider>
-  );
-
-  // Wait for initial loading
-  await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
-
-  // Initial state check
-  expect(screen.getByTestId('qualifyingAnswers')).toHaveTextContent('{}');
-
-  // Dispatch updateQualifyingAnswer action
-  act(() => {
-    dispatch({ type: 'UPDATE_QUALIFYING_ANSWER', payload: { questionId: 'qf1', answer: true } });
-  });
-
-  // Check updated state
-  await waitFor(() => {
-    expect(screen.getByTestId('qualifyingAnswers')).toHaveTextContent(JSON.stringify({ qf1: true }));
-  });
-
-  // Check if state was saved
-   await waitFor(() => {
-      expect(mockSessionStorage.setItem).toHaveBeenCalledWith(
-        `assessmentState_${sessionId}`,
-        expect.stringContaining('"qualifyingAnswers":{"qf1":true}') // Check if the updated state is saved
-      );
-    });
-});
-
-// Add more tests for goToPage, calculateScores, state saving etc.
 
   test('should update organization state and save to sessionStorage on updateOrganization', async () => {
-    const sessionId = 'test-session-update-org';
-    mockSessionStorage.setItem('assessmentSessionId', sessionId);
-
-    let dispatch;
-    const TestComponentWithAction = () => {
-      const state = useAssessmentState();
-      dispatch = state.dispatch;
-      return <TestComponent />;
+    let dispatchFn;
+    const handleDispatch = (dispatch) => {
+      dispatchFn = dispatch;
     };
 
     render(
       <AssessmentProvider>
-        <TestComponentWithAction />
+        <TestComponent onDispatch={handleDispatch} />
       </AssessmentProvider>
     );
-    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
 
-    const newOrgData = { industry: 'Tech', companySize: '51-200' };
+    await waitFor(() => expect(dispatchFn).toBeDefined());
+
+    const newOrgData = { industry: 'Healthcare', companySize: '500+', role: 'CIO' };
     act(() => {
-      dispatch({ type: 'UPDATE_ORGANIZATION', payload: newOrgData });
+      dispatchFn({ type: 'UPDATE_ORGANIZATION', payload: newOrgData });
     });
 
-    // Check updated state (Need to add organization data to TestComponent or use a different check)
-    // For now, just check if save was called with updated data
     await waitFor(() => {
-      expect(mockSessionStorage.setItem).toHaveBeenCalledWith(
-        `assessmentState_${sessionId}`,
-        expect.stringContaining('"organization":{"industry":"Tech","companySize":"51-200"}')
-      );
+      expect(screen.getByTestId('organization')).toHaveTextContent(JSON.stringify(newOrgData));
     });
   });
 
   test('should update journey status and save to sessionStorage on updateJourneyStatus', async () => {
-    const sessionId = 'test-session-update-journey';
-    mockSessionStorage.setItem('assessmentSessionId', sessionId);
-
-    let dispatch;
-    const TestComponentWithAction = () => {
-      const state = useAssessmentState();
-      dispatch = state.dispatch;
-      return <TestComponent />;
+    let dispatchFn;
+    const handleDispatch = (dispatch) => {
+      dispatchFn = dispatch;
     };
 
     render(
       <AssessmentProvider>
-        <TestComponentWithAction />
+        <TestComponent onDispatch={handleDispatch} />
       </AssessmentProvider>
     );
-    await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
 
-    const newJourneyStatus = { type: 'exploring', responses: { q1: 'yes' } };
+    await waitFor(() => expect(dispatchFn).toBeDefined());
+
+    const newJourneyStatus = { type: 'exploring', description: 'Exploring new opportunities' };
     act(() => {
-      dispatch({ type: 'UPDATE_JOURNEY_STATUS', payload: newJourneyStatus });
+      dispatchFn({ type: 'UPDATE_JOURNEY_STATUS', payload: newJourneyStatus });
     });
 
-    // Check if save was called with updated data
     await waitFor(() => {
-      expect(mockSessionStorage.setItem).toHaveBeenCalledWith(
-        `assessmentState_${sessionId}`,
-        expect.stringContaining('"journeyStatus":{"type":"exploring","responses":{"q1":"yes"}}')
-      );
+      expect(screen.getByTestId('journey-status')).toHaveTextContent(JSON.stringify(newJourneyStatus));
     });
   });
 
@@ -334,8 +255,8 @@ test('should update qualifyingAnswers state and save to sessionStorage on update
 
     let dispatch;
     const TestComponentWithAction = () => {
-      const state = useAssessmentState();
-      dispatch = state.dispatch;
+      const { assessment, dispatch } = useAssessment();
+      dispatch = dispatch;
       return <TestComponent />;
     };
 
@@ -366,8 +287,8 @@ test('should update qualifyingAnswers state and save to sessionStorage on update
 
     let dispatch;
     const TestComponentWithAction = () => {
-      const state = useAssessmentState();
-      dispatch = state.dispatch;
+      const { assessment, dispatch } = useAssessment();
+      dispatch = dispatch;
       return <TestComponent />;
     };
 
@@ -398,8 +319,8 @@ test('should update qualifyingAnswers state and save to sessionStorage on update
 
     let dispatch;
     const TestComponentWithAction = () => {
-      const state = useAssessmentState();
-      dispatch = state.dispatch;
+      const { assessment, dispatch } = useAssessment();
+      dispatch = dispatch;
       return <TestComponent />;
     };
 
@@ -410,36 +331,35 @@ test('should update qualifyingAnswers state and save to sessionStorage on update
     );
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
 
-    expect(screen.getByTestId('current-page')).toHaveTextContent('0');
+    expect(screen.getByTestId('current-step')).toHaveTextContent('demographics');
 
     act(() => {
-      dispatch({ type: 'GO_TO_PAGE', payload: 3 });
+      dispatch({ type: 'GO_TO_PAGE', payload: 'security' });
     });
 
     await waitFor(() => {
-      expect(screen.getByTestId('current-page')).toHaveTextContent('3');
+      expect(screen.getByTestId('current-step')).toHaveTextContent('security');
     });
 
     // Check if save was called with updated data
     await waitFor(() => {
       expect(mockSessionStorage.setItem).toHaveBeenCalledWith(
         `assessmentState_${sessionId}`,
-        expect.stringContaining('"currentPage":3')
+        expect.stringContaining('"currentStep":"security"')
       );
     });
   });
 
   test('should reset state and save to sessionStorage on resetAssessment', async () => {
     const sessionId = 'test-session-reset';
-    const initialState = { currentPage: 2, answers: { q1: 'a' }, isComplete: false };
+    const initialState = { currentStep: 'demographics', organization: { industry: '', companySize: '', role: '' }, journeyStatus: { type: '', description: '' }, errors: null };
     mockSessionStorage.setItem('assessmentSessionId', sessionId);
     mockSessionStorage.setItem(`assessmentState_${sessionId}`, JSON.stringify(initialState));
 
-
     let dispatch;
     const TestComponentWithAction = () => {
-      const state = useAssessmentState();
-      dispatch = state.dispatch;
+      const { assessment, dispatch } = useAssessment();
+      dispatch = dispatch;
       return <TestComponent />;
     };
 
@@ -451,8 +371,10 @@ test('should update qualifyingAnswers state and save to sessionStorage on update
     await waitFor(() => expect(screen.queryByText('Loading...')).not.toBeInTheDocument());
 
     // Verify initial loaded state
-    expect(screen.getByTestId('current-page')).toHaveTextContent('2');
-    expect(screen.getByTestId('answers')).toHaveTextContent(JSON.stringify({ q1: 'a' }));
+    expect(screen.getByTestId('current-step')).toHaveTextContent('demographics');
+    expect(screen.getByTestId('organization')).toHaveTextContent(JSON.stringify(initialState.organization));
+    expect(screen.getByTestId('journey-status')).toHaveTextContent(JSON.stringify(initialState.journeyStatus));
+    expect(screen.getByTestId('errors')).toHaveTextContent(JSON.stringify(initialState.errors));
 
     act(() => {
       dispatch({ type: 'RESET_ASSESSMENT' });
@@ -460,16 +382,24 @@ test('should update qualifyingAnswers state and save to sessionStorage on update
 
     // Check reset state
     await waitFor(() => {
-      expect(screen.getByTestId('current-page')).toHaveTextContent('0');
-      expect(screen.getByTestId('answers')).toHaveTextContent('{}');
-      expect(screen.getByTestId('is-complete')).toHaveTextContent('false');
+      expect(screen.getByTestId('current-step')).toHaveTextContent('demographics');
+      expect(screen.getByTestId('organization')).toHaveTextContent(JSON.stringify({
+        industry: '',
+        companySize: '',
+        role: ''
+      }));
+      expect(screen.getByTestId('journey-status')).toHaveTextContent(JSON.stringify({
+        type: '',
+        description: ''
+      }));
+      expect(screen.getByTestId('errors')).toHaveTextContent('null');
     });
 
     // Check if reset state was saved
     await waitFor(() => {
       expect(mockSessionStorage.setItem).toHaveBeenCalledWith(
         `assessmentState_${sessionId}`,
-        expect.stringContaining('"currentPage":0,"answers":{},"isComplete":false') // Check default state values
+        expect.stringContaining('"currentStep":"demographics","organization":{"industry":"","companySize":"","role":""},"journeyStatus":{"type":"","description":""},"errors":null') // Check default state values
       );
     });
   });

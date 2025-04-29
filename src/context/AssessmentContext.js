@@ -1,137 +1,105 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { generateUniqueId, debounce } from '../utils/helpers'; // Assuming helpers.js is in ../utils
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { generateUniqueId } from '../utils/helpers';
 
+// Constants
+const STORAGE_KEY = 'assessment';
+const STATE_STORAGE_KEY_PREFIX = 'assessmentState_';
+
+// Initial state
+const defaultState = {
+  currentStep: 'demographics',
+  organization: {
+    industry: '',
+    companySize: '',
+    role: ''
+  },
+  security: {},
+  goals: {},
+  budget: {
+    range: '',
+    timeline: ''
+  },
+  errors: {},
+  journeyStatus: {
+    type: 'not_started',
+    description: '',
+    demographics: 'incomplete',
+    assessment: 'incomplete',
+    results: 'incomplete',
+    recommendations: 'incomplete',
+    completedSteps: []
+  }
+};
+
+// Action types
+const ActionTypes = {
+  SET_DEMOGRAPHICS: 'SET_DEMOGRAPHICS',
+  SET_JOURNEY_STATUS: 'SET_JOURNEY_STATUS',
+  SET_JOURNEY_RESPONSES: 'SET_JOURNEY_RESPONSES',
+  SET_GOALS: 'SET_GOALS',
+  SET_QUALIFYING_RESPONSES: 'SET_QUALIFYING_RESPONSES',
+  SET_BUDGET_INFO: 'SET_BUDGET_INFO',
+  SET_MATURITY_SCORE: 'SET_MATURITY_SCORE',
+  SET_RECOMMENDATIONS: 'SET_RECOMMENDATIONS',
+  SET_CURRENT_STEP: 'SET_CURRENT_STEP',
+  RESET_STATE: 'RESET_STATE'
+};
+
+// Create context
 const AssessmentContext = createContext();
 
-export const useAssessmentState = () => {
+export const useAssessment = () => {
   const context = useContext(AssessmentContext);
   if (!context) {
-    throw new Error('useAssessmentState must be used within an AssessmentProvider');
+    throw new Error('useAssessment must be used within an AssessmentProvider');
   }
   return context;
 };
 
-const SESSION_STORAGE_KEY = 'assessmentSessionId';
-const STATE_STORAGE_KEY_PREFIX = 'assessmentState_';
-
-export const AssessmentProvider = ({ children }) => {
-  const [sessionId, setSessionId] = useState(null);
-  const [assessmentState, setAssessmentState] = useState({});
-  const [isLoading, setIsLoading] = useState(true); // Start loading
-
-  // Initialize sessionId and load state from sessionStorage
-  useEffect(() => {
-    let storedSessionId = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (!storedSessionId) {
-      storedSessionId = generateUniqueId();
-      sessionStorage.setItem(SESSION_STORAGE_KEY, storedSessionId);
-    }
-    setSessionId(storedSessionId);
-
-    // Load state associated with this session ID
-    const storedState = sessionStorage.getItem(`${STATE_STORAGE_KEY_PREFIX}${storedSessionId}`);
-    if (storedState) {
-      try {
-        setAssessmentState(JSON.parse(storedState));
-      } catch (error) {
-        console.error("Failed to parse stored assessment state:", error);
-        // Initialize with default state if parsing fails
-        setAssessmentState({
-          currentPage: 0,
-          answers: {},
-          scores: {},
-          maturityLevel: null,
-          qualifyingAnswers: {},
-          isComplete: false,
-        });
+export const AssessmentProvider = ({ children, initialState }) => {
+  const [assessment, setAssessment] = useState(() => {
+    try {
+      const savedState = window.sessionStorage.getItem(STORAGE_KEY);
+      if (savedState) {
+        const parsedState = JSON.parse(savedState);
+        return {
+          ...defaultState,
+          ...parsedState
+        };
       }
-    } else {
-       // Initialize with default state if nothing is stored
-       setAssessmentState({
-        currentPage: 0,
-        answers: {},
-        scores: {},
-        maturityLevel: null,
-        qualifyingAnswers: {},
-        isComplete: false,
+      const mergedState = {
+        ...defaultState,
+        ...(initialState || {})
+      };
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
+      return mergedState;
+    } catch (error) {
+      console.error('Failed to initialize assessment state:', error);
+      const fallbackState = {
+        ...defaultState,
+        ...(initialState || {})
+      };
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(fallbackState));
+      return fallbackState;
+    }
+  });
+
+  const updateAssessment = (updater) => {
+    try {
+      setAssessment((prev) => {
+        const newState = typeof updater === 'function' ? updater(prev) : updater;
+        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+        return newState;
       });
+    } catch (error) {
+      console.error('Failed to update assessment state:', error);
     }
-    setIsLoading(false); // Finished loading
-  }, []);
-
-  // Debounced save function
-  const saveStateToSessionStorage = useCallback(debounce((id, state) => {
-    if (id) {
-      try {
-        sessionStorage.setItem(`${STATE_STORAGE_KEY_PREFIX}${id}`, JSON.stringify(state));
-        console.log('State saved for session:', id);
-      } catch (error) {
-        console.error("Failed to save assessment state to sessionStorage:", error);
-      }
-    }
-  }, 500), []); // Debounce save by 500ms
-
-  // Update state and save to sessionStorage whenever assessmentState changes
-  useEffect(() => {
-    if (sessionId && !isLoading) { // Only save after initial load/session ID generation
-      saveStateToSessionStorage(sessionId, assessmentState);
-    }
-  }, [assessmentState, sessionId, isLoading, saveStateToSessionStorage]);
-
-  // Function to update a specific answer
-  const updateAnswer = useCallback((questionId, answerValue) => {
-    setAssessmentState(prevState => ({
-      ...prevState,
-      answers: {
-        ...prevState.answers,
-        [questionId]: answerValue,
-      },
-    }));
-  }, []);
-
-  // Function to update qualifying answer
-   const updateQualifyingAnswer = useCallback((questionId, answerValue) => {
-    setAssessmentState(prevState => ({
-      ...prevState,
-      qualifyingAnswers: {
-        ...prevState.qualifyingAnswers,
-        [questionId]: answerValue,
-      },
-    }));
-  }, []);
-
-
-  // Function to navigate pages
-  const goToPage = useCallback((pageIndex) => {
-    setAssessmentState(prevState => ({
-      ...prevState,
-      currentPage: pageIndex,
-    }));
-  }, []);
-
-  // Function to calculate scores (placeholder)
-  const calculateScores = useCallback(() => {
-    // Placeholder: Actual score calculation logic will go here
-    console.log("Calculating scores based on:", assessmentState.answers);
-    // Example score update (replace with actual logic)
-    setAssessmentState(prevState => ({
-      ...prevState,
-      scores: { /* calculated scores */ },
-      maturityLevel: 'Calculated Level', // Replace with actual level calculation
-      isComplete: true, // Mark as complete after calculation
-    }));
-  }, [assessmentState.answers]);
-
+  };
 
   const value = {
-    sessionId,
-    assessmentState,
-    setAssessmentState, // Provide direct access if needed, but prefer specific updaters
-    updateAnswer,
-    updateQualifyingAnswer,
-    goToPage,
-    calculateScores,
-    isLoading, // Expose loading state
+    assessment,
+    setAssessment: updateAssessment,
+    defaultState
   };
 
   return (
@@ -140,3 +108,51 @@ export const AssessmentProvider = ({ children }) => {
     </AssessmentContext.Provider>
   );
 };
+
+export function useAssessmentState() {
+  const { assessment, setAssessment } = useAssessment();
+  return { state: assessment, setAssessment };
+}
+
+export function useAssessmentActions() {
+  const { setAssessment } = useAssessment();
+  
+  return {
+    updateOrganization: (data) => 
+      setAssessment((prev) => ({
+        ...prev,
+        organization: { ...prev.organization, ...data }
+      })),
+    updateJourneyStatus: (data) =>
+      setAssessment((prev) => ({
+        ...prev,
+        journeyStatus: { ...prev.journeyStatus, ...data }
+      })),
+    updateSelectedGoals: (goals) =>
+      setAssessment((prev) => ({
+        ...prev,
+        selectedGoals: goals
+      })),
+    updateBudgetTimeline: (data) =>
+      setAssessment((prev) => ({
+        ...prev,
+        budget: { ...prev.budget, ...data }
+      })),
+    goToPage: (page) =>
+      setAssessment((prev) => ({
+        ...prev,
+        currentStep: page
+      })),
+    setError: (error) =>
+      setAssessment((prev) => ({
+        ...prev,
+        errors: error
+      })),
+    resetAssessment: () => {
+      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(defaultState));
+      setAssessment(defaultState);
+    }
+  };
+}
+
+export default AssessmentContext;
