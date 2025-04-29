@@ -1,0 +1,127 @@
+body {
+    font-family: sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f4f4f4;
+    margin: 0;
+}
+
+.container {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    max-width: 600px;
+    width: 90%;
+}
+
+h1 {
+    color: #333;
+    margin-bottom: 20px;
+}
+
+h2 {
+    color: #555;
+    margin-bottom: 15px;
+}
+
+p {
+    color: #666;
+    line-height: 1.6;
+}
+
+button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-top: 20px;
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.hidden {
+    display: none;
+}
+
+#question-options {
+    margin-top: 20px;
+    text-align: left;
+}
+
+#question-options label {
+    display: block;
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+
+#question-options input[type="radio"] {
+    margin-right: 10px;
+}
+
+#qualifying-question-container {
+    margin-top: 15px;
+    text-align: left;
+}
+
+#qualifying-question-container label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+#qualifying-input {
+    width: calc(100% - 22px); /* Adjust for padding and border */
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-top: 5px;
+}
+
+
+#prev-button {
+    margin-right: 10px;
+    background-color: #6c757d;
+}
+
+#prev-button:hover {
+    background-color: #5a6268;
+}
+
+#score-display {
+    font-size: 2em;
+    font-weight: bold;
+    color: #007bff;
+    margin: 15px 0;
+}
+
+#progress-bar-container {
+    width: 100%;
+    background-color: #e0e0e0;
+    border-radius: 5px;
+    margin-top: 30px;
+    height: 10px;
+    overflow: hidden; /* Ensures the inner bar stays within the container */
+}
+
+#progress-bar {
+    height: 100%;
+    width: 0%; /* Start with 0 width */
+    background-color: #007bff;
+    border-radius: 5px;
+    transition: width 0.3s ease-in-out;
+}

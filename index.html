@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Maturity Assessment</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Maturity Assessment</h1>
+        </header>
+        <main id="assessment-container">
+            <!-- Assessment content will be loaded here -->
+            <div id="start-page">
+                <h2>Assess Your AI Maturity</h2>
+                <p>Understand your organization's AI readiness and identify areas for growth.</p>
+                <button id="start-button">Start Assessment</button>
+            </div>
+            <div id="question-page" class="hidden">
+                <h2 id="question-title"></h2>
+                <p id="question-text"></p>
+                <div id="options-container"></div>
+                <div id="qualifying-question-container" class="hidden">
+                    <label id="qualifying-question-label" for="qualifying-input"></label>
+                    <input type="text" id="qualifying-input" name="qualifying-input">
+                </div>
+                <div class="navigation-buttons">
+                    <button id="prev-button" class="hidden">Previous</button>
+                    <button id="next-button">Next</button>
+                </div>
+            </div>
+            <div id="results-page" class="hidden">
+                <h2>Assessment Results</h2>
+                <p>Your AI Maturity Score:</p>
+                <div id="score-display">--</div>
+                <p id="score-interpretation"></p>
+                <button id="restart-button">Restart Assessment</button>
+            </div>
+        </main>
+        <footer>
+            <p>&copy; 2025 AI Maturity Assessment</p>
+        </footer>
+    </div>
+    <script src="src/data/assessment.js"></script>
+    <script src="src/app.js"></script>
+</body>
+</html>
